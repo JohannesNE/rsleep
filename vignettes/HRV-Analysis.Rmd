@@ -1,0 +1,83 @@
+---
+title: "Heart Rate Variability analysis using rsleep and RHRV"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{HRV-Analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+mesa_path <- "/Users/paul/Documents/data/mesa/"
+```
+
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+# Do not run chunks if files are not present.
+knitr::opts_chunk$set(eval = dir.exists(mesa_path))
+```
+
+```{r}
+
+# h <- edfReader::readEdfHeader(paste0(mesa_path,"polysomnography/edfs/mesa-sleep-0001.edf"))
+# s <- edfReader::readEdfSignals(h,signals = "EKG")
+
+h <- edfReader::readEdfHeader("15012016HD.edf")
+s <- edfReader::readEdfSignals(h,signals = "ECG")
+
+```
+
+
+```{r}
+
+#sec <- 11148
+sec <- 11100
+ex <- s$signal[(256*sec):(256*(sec+10))]
+test <- data.frame(Volts = ex,
+                    Seconds = c(1:length(ex))/256)
+
+peaks <- rsleep::detect_rpeaks(ex,sRate = 256)
+
+ggplot(test,
+       aes(x = Seconds,
+           y = Volts)) +
+  geom_line() + theme_bw() +
+  geom_vline(data.frame(p = peaks),
+             mapping = aes(xintercept = p),
+             linetype="dashed",color = "red")
+
+```
+
+```{r}
+peaks <- rsleep::detect_rpeaks(signal = s$signal,
+                       sRate = s$sRate)
+```
+
+```{r}
+library(RHRV)
+
+hrv <- CreateHRVData()
+hrv <- LoadBeatVector(HRVData = hrv,
+                      beatPositions = peaks,
+                      scale = 1,
+                      datetime = format(as.POSIXct(s$startTime), "%d/%m/%Y %H:%M:%S"))
+
+hrv <- BuildNIHR(hrv)
+# Filtering twice to eliminate all artifacts
+hrv <- FilterNIHR(hrv)
+hrv <- FilterNIHR(hrv)
+
+
+hrv <- EditNIHR(hrv)
+# Interpolation of the instantaneous heart rate
+hrv <- InterpolateNIHR(hrv)
+PlotHR(hrv)
+
+mean(hrv$Beat$niHR)
+```
+
+
